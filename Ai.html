@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liquid Glass Chat - Video Call Enabled</title>
+    <style>
+        /* --- GLOBAL & BACKGROUND --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { background: linear-gradient(135deg, #74ebd5 0%, #9face6 100%); height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; color: #fff; }
+
+        /* --- LIQUID GLASS UTILITY --- */
+        .glass { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37); }
+        .smooth-transition { transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s cubic-bezier(0.25, 1, 0.5, 1); will-change: transform, opacity; }
+
+        /* --- APP CONTAINER --- */
+        #app-container { width: 100%; max-width: 1200px; height: 90vh; border-radius: 20px; position: relative; overflow: hidden; display: flex; }
+
+        /* --- LOGIN SCREEN --- */
+        #login-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 50; border-radius: 20px; }
+        .login-box { padding: 40px; border-radius: 20px; text-align: center; width: 90%; max-width: 400px; }
+        .login-box input { width: 100%; padding: 12px; margin: 15px 0; border-radius: 10px; border: none; background: rgba(255,255,255,0.2); color: #fff; outline: none; }
+        .login-box input::placeholder { color: rgba(255,255,255,0.7); }
+        .login-box button { width: 100%; padding: 12px; border: none; border-radius: 10px; background: rgba(255,255,255,0.3); color: #fff; cursor: pointer; font-weight: bold; font-size: 16px; margin-bottom: 10px; }
+        .login-box button:hover { background: rgba(255,255,255,0.5); }
+
+        /* --- MAIN CHAT UI --- */
+        #main-app { display: flex; width: 100%; height: 100%; opacity: 0; pointer-events: none; transform: scale(0.95); }
+        #main-app.active { opacity: 1; pointer-events: auto; transform: scale(1); }
+
+        /* --- SIDEBAR --- */
+        .sidebar { width: 300px; height: 100%; border-right: 1px solid rgba(255,255,255,0.2); padding: 20px; display: flex; flex-direction: column; transform: translateX(0); }
+        .sidebar.closed { transform: translateX(-100%); position: absolute; }
+        .profile-section { display: flex; align-items: center; gap: 15px; margin-bottom: 30px; position: relative; }
+        .profile-pic { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.5); cursor: pointer; }
+        .profile-pic:hover { opacity: 0.8; }
+        .username { font-weight: bold; font-size: 18px; cursor: pointer; border-bottom: 1px dashed transparent; }
+        
+        .contact-list { flex: 1; overflow-y: auto; }
+        .contact-item { padding: 12px; border-radius: 10px; margin-bottom: 10px; cursor: pointer; background: rgba(255,255,255,0.05); }
+
+        /* --- CHAT AREA --- */
+        .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; }
+        .chat-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.2); display: flex; justify-content: space-between; align-items: center; }
+        .header-actions button { background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 40px; height: 40px; margin-left: 10px; cursor: pointer; color: white; font-size: 18px; }
+        .toggle-contact-btn { background: transparent; border: none; color: white; font-size: 24px; cursor: pointer; display: none; margin-right: 15px; }
+
+        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
+        .message { margin-bottom: 15px; max-width: 70%; padding: 12px 16px; border-radius: 20px; }
+        .msg-in { background: rgba(255,255,255,0.2); align-self: flex-start; border-bottom-left-radius: 0; }
+        .msg-out { background: rgba(0, 123, 255, 0.4); align-self: flex-end; margin-left: auto; border-bottom-right-radius: 0; }
+
+        .chat-input { padding: 20px; display: flex; gap: 10px; border-top: 1px solid rgba(255,255,255,0.2); }
+        .chat-input input { flex: 1; padding: 12px 20px; border-radius: 20px; border: none; background: rgba(255,255,255,0.2); color: white; outline: none; }
+        .chat-input button { padding: 12px 25px; border-radius: 20px; border: none; background: rgba(255,255,255,0.4); color: white; cursor: pointer; font-weight: bold; }
+
+        /* --- MUSIC PLAYER --- */
+        .music-player { position: absolute; bottom: 90px; right: 20px; width: 280px; border-radius: 15px; padding: 15px; z-index: 10; display: flex; flex-direction: column; }
+        .music-player input { width: 100%; padding: 8px; border-radius: 8px; border: none; background: rgba(255,255,255,0.2); color: white; margin-bottom: 10px; outline: none; }
+        #yt-results { max-height: 120px; overflow-y: auto; margin-bottom: 10px; font-size: 12px; }
+        .yt-item { padding: 5px; cursor: pointer; border-radius: 5px; margin-bottom: 5px; background: rgba(0,0,0,0.2); display: flex; align-items: center; gap: 10px; }
+        .yt-item img { width: 50px; border-radius: 4px; }
+        .yt-item:hover { background: rgba(0,0,0,0.4); }
+
+        /* --- MODAL PANGGILAN (WEBRTC VIDEO) --- */
+        #call-modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(8px); overflow: hidden; }
+        #remote-video { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; z-index: 1; }
+        #local-video { width: 150px; height: 200px; object-fit: cover; position: absolute; bottom: 20px; right: 20px; z-index: 2; border-radius: 15px; border: 2px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .call-controls { position: absolute; bottom: 40px; z-index: 3; display: flex; flex-direction: column; align-items: center; }
+        #call-status { text-shadow: 1px 1px 4px rgba(0,0,0,0.8); margin-bottom: 20px; }
+        .end-call-btn { background: #ff4757; padding: 15px 30px; border-radius: 30px; border: none; color: white; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+
+        @media (max-width: 768px) {
+            .sidebar { position: absolute; z-index: 20; background: rgba(116, 235, 213, 0.95); backdrop-filter: blur(20px); }
+            .toggle-contact-btn { display: inline-block; }
+            .sidebar.closed { transform: translateX(-100%); }
+            .music-player { bottom: 80px; width: calc(100% - 40px); }
+            #local-video { width: 100px; height: 150px; }
+        }
+    </style>
+</head>
+<body>
+
+<audio id="notification-sound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="auto"></audio>
+
+<div id="app-container" class="glass">
+    
+    <!-- MODAL PANGGILAN VIDEO -->
+    <div id="call-modal" class="smooth-transition">
+        <!-- Video Lawan Bicara (Layar Penuh) -->
+        <video id="remote-video" autoplay playsinline></video>
+        <!-- Video Sendiri (Pojok Kanan Bawah) -->
+        <video id="local-video" autoplay playsinline muted></video>
+        
+        <div class="call-controls">
+            <h2 id="call-status">Menyiapkan Kamera...</h2>
+            <button class="end-call-btn" id="btn-end-call">Akhiri Panggilan</button>
+        </div>
+    </div>
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="glass smooth-transition">
+        <!-- ... (Isi Login Screen Sama Seperti Sebelumnya) ... -->
+        <div class="login-box glass">
+            <h2>Masuk ke Obrolan</h2>
+            <input type="email" id="email-input" placeholder="Email Anda">
+            <input type="password" id="password-input" placeholder="Password">
+            <button id="btn-login" class="smooth-transition">Masuk / Daftar</button>
+            <p id="login-status" style="font-size: 12px; color: #ffeb3b; margin-top: 10px;"></p>
+        </div>
+    </div>
+
+    <!-- MAIN APP SCREEN -->
+    <div id="main-app" class="smooth-transition">
+        
+        <!-- SIDEBAR -->
+        <div id="sidebar" class="sidebar glass smooth-transition">
+            <div class="profile-section">
+                <input type="file" id="upload-photo" accept="image/*" style="display: none;">
+                <img src="https://i.pravatar.cc/150?img=11" alt="Profile" class="profile-pic" id="profile-img" title="Klik untuk ubah foto">
+                <div class="username" id="display-username">Aa Odeng</div>
+            </div>
+            <h3>Kontak</h3>
+            <div class="contact-list" id="contact-list">
+                <div class="contact-item">Grup Dev</div>
+            </div>
+        </div>
+
+        <!-- CHAT AREA -->
+        <div class="chat-area">
+            <div class="chat-header glass">
+                <div style="display: flex; align-items: center;">
+                    <button class="toggle-contact-btn smooth-transition" id="btn-toggle">☰</button>
+                    <h3>Grup Dev</h3>
+                </div>
+                <!-- TOMBOL PANGGILAN -->
+                <div class="header-actions">
+                    <button title="Video Call" id="btn-start-video">🎥</button>
+                </div>
+            </div>
+
+            <div class="chat-messages" id="chat-messages"></div>
+
+            <!-- MUSIC PLAYER -->
+            <div class="music-player glass smooth-transition">
+                <div style="font-size: 12px; margin-bottom: 5px;">Pencarian YouTube</div>
+                <input type="text" id="yt-search" placeholder="Cari lalu tekan Enter...">
+                <div id="yt-results"></div>
+                <div id="yt-player-container"></div>
+            </div>
+
+            <div class="chat-input glass">
+                <input type="text" id="chat-input-field" placeholder="Ketik pesan...">
+                <button id="btn-send" class="smooth-transition">Kirim</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    // 1. IMPORT FIREBASE SDKs & FIRESTORE FUNCTIONS
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, setDoc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+    import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
+
+    // 2. KONFIGURASI FIREBASE (GANTI DENGAN KODE DARI FIREBASE CONSOLE ANDA)
+    const firebaseConfig = {
+        apiKey : "AIzaSyARDd9t5RGOriQ60MNsoaUbp9PnSJDWRNw" , 
+  authDomain : "chat-1c96f.firebaseapp.com" , 
+  projectId : "chat-1c96f" , 
+  storageBucket : "chat-1c96f.firebasestorage.app" , 
+  messagingSenderId : "765730558" , 
+  appId : "1:765730558:web:7e7a61a83e350d24f24faf" 
+};
+    const YOUTUBE_API_KEY = "AIzaSyAXYTJMRNnSz4DSAq--HGraG9f28SgfZvs";
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    // ==========================================
+    // LOGIKA UI & AUTH (Sama seperti sebelumnya)
+    // ==========================================
+    document.getElementById('btn-toggle').addEventListener('click', () => { document.getElementById('sidebar').classList.toggle('closed'); });
+    document.getElementById('display-username').addEventListener('click', () => {
+        const newName = prompt("Ubah Username Anda:", auth.currentUser?.displayName || "Aa Odeng");
+        if(newName && auth.currentUser) {
+            updateProfile(auth.currentUser, { displayName: newName }).then(() => { document.getElementById('display-username').innerText = newName; });
+        }
+    });
+
+    const loginScreen = document.getElementById('login-screen');
+    const mainApp = document.getElementById('main-app');
+    document.getElementById('btn-login').addEventListener('click', async () => {
+        const email = document.getElementById('email-input').value;
+        const password = document.getElementById('password-input').value;
+        document.getElementById('login-status').innerText = "Memproses...";
+        try { await signInWithEmailAndPassword(auth, email, password); } 
+        catch (error) {
+            if(error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+                try { await createUserWithEmailAndPassword(auth, email, password); } 
+                catch (e) { document.getElementById('login-status').innerText = "Gagal: " + e.message; }
+            } else { document.getElementById('login-status').innerText = "Gagal: " + error.message; }
+        }
+    });
+
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            loginScreen.style.opacity = '0';
+            setTimeout(() => { loginScreen.style.display = 'none'; mainApp.classList.add('active'); }, 300);
+            document.getElementById('display-username').innerText = user.displayName || "User Baru";
+            if(user.photoURL) document.getElementById('profile-img').src = user.photoURL;
+            loadMessages();
+        }
+    });
+
+    // Chat Logic
+    const chatInput = document.getElementById('chat-input-field');
+    const chatMessages = document.getElementById('chat-messages');
+    const notifSound = document.getElementById('notification-sound');
+    let initialLoad = true;
+
+    document.getElementById('btn-send').addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') sendMessage(); });
+
+    async function sendMessage(customText = null) {
+        const text = customText || chatInput.value.trim();
+        if(text === "" || !auth.currentUser) return;
+        chatInput.value = "";
+        await addDoc(collection(db, "messages"), { text: text, uid: auth.currentUser.uid, timestamp: new Date() });
+    }
+
+    function loadMessages() {
+        const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
+        onSnapshot(q, (snapshot) => {
+            chatMessages.innerHTML = ''; 
+            let isNewMessageReceived = false;
+            snapshot.forEach((doc) => {
+                const msg = doc.data();
+                const div = document.createElement('div');
+                const isOut = msg.uid === auth.currentUser.uid;
+                div.className = `message glass ${isOut ? 'msg-out' : 'msg-in'}`;
+                div.innerText = msg.text;
+                chatMessages.appendChild(div);
+                if (!initialLoad && !isOut) isNewMessageReceived = true;
+            });
+            if (isNewMessageReceived) notifSound.play().catch(e => {});
+            chatMessages.scrollTop = chatMessages.scrollHeight; 
+            if (initialLoad) initialLoad = false;
+        });
+    }
+
+    // ==========================================
+    // LOGIKA WEBRTC & VIDEO CALL
+    // ==========================================
+    
+    // Server STUN Google (Gratis) untuk membantu koneksi P2P
+    const servers = {
+        iceServers: [
+            { urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }
+        ]
+    };
+
+    let pc = null;
+    let localStream = null;
+    let remoteStream = null;
+    
+    const callModal = document.getElementById('call-modal');
+    const localVideo = document.getElementById('local-video');
+    const remoteVideo = document.getElementById('remote-video');
+    const callStatus = document.getElementById('call-status');
+    const roomName = "global_room"; // ID Ruangan statis untuk kemudahan tes
+
+    document.getElementById('btn-start-video').addEventListener('click', joinOrCreateCall);
+    document.getElementById('btn-end-call').addEventListener('click', hangupCall);
+
+    async function setupMedia() {
+        try {
+            // Minta akses kamera dan mic
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            localVideo.srcObject = localStream;
+            remoteStream = new MediaStream();
+            remoteVideo.srcObject = remoteStream;
+            
+            // Tampilkan Modal
+            callModal.style.display = 'flex';
+            setTimeout(() => { callModal.style.opacity = '1'; }, 10);
+            
+            return true;
+        } catch (error) {
+            alert("Akses kamera/mikrofon ditolak atau tidak ditemukan!");
+            return false;
+        }
+    }
+
+    async function joinOrCreateCall() {
+        if (!(await setupMedia())) return;
+
+        pc = new RTCPeerConnection(servers);
+
+        // Tambahkan track lokal ke PeerConnection
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+        // Terima track dari lawan bicara
+        pc.ontrack = event => {
+            event.streams[0].getTracks().forEach(track => {
+                remoteStream.addTrack(track);
+            });
+        };
+
+        const callDocRef = doc(db, "calls", roomName);
+        const offerCandidates = collection(callDocRef, "offerCandidates");
+        const answerCandidates = collection(callDocRef, "answerCandidates");
+
+        const callData = await getDoc(callDocRef);
+
+        if (!callData.exists()) {
+            // --- JIKA BELUM ADA PANGGILAN (KITA SEBAGAI CALLER) ---
+            callStatus.innerText = "Memanggil... Menunggu jawaban.";
+            sendMessage("🎥 Saya memulai Video Call! Klik tombol kamera di atas untuk bergabung.");
+
+            pc.onicecandidate = event => {
+                if(event.candidate) addDoc(offerCandidates, event.candidate.toJSON());
+            };
+
+            const offerDescription = await pc.createOffer();
+            await pc.setLocalDescription(offerDescription);
+
+            const offer = {
+                sdp: offerDescription.sdp,
+                type: offerDescription.type,
+            };
+
+            await setDoc(callDocRef, { offer });
+
+            // Dengarkan jika ada yang menjawab (Answer)
+            onSnapshot(callDocRef, (snapshot) => {
+                const data = snapshot.data();
+                if (!pc.currentRemoteDescription && data && data.answer) {
+                    callStatus.innerText = "Terhubung!";
+                    const answerDescription = new RTCSessionDescription(data.answer);
+                    pc.setRemoteDescription(answerDescription);
+                }
+            });
+
+            // Dengarkan ICE Candidate dari penerima
+            onSnapshot(answerCandidates, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === 'added') {
+                        const candidate = new RTCIceCandidate(change.doc.data());
+                        pc.addIceCandidate(candidate);
+                    }
+                });
+            });
+
+        } else {
+            // --- JIKA SUDAH ADA PANGGILAN (KITA SEBAGAI PENERIMA / CALLEE) ---
+            callStatus.innerText = "Menghubungkan...";
+            
+            pc.onicecandidate = event => {
+                if(event.candidate) addDoc(answerCandidates, event.candidate.toJSON());
+            };
+
+            const offerDescription = callData.data().offer;
+            await pc.setRemoteDescription(new RTCSessionDescription(offerDescription));
+
+            const answerDescription = await pc.createAnswer();
+            await pc.setLocalDescription(answerDescription);
+
+            const answer = {
+                type: answerDescription.type,
+                sdp: answerDescription.sdp,
+            };
+
+            await updateDoc(callDocRef, { answer });
+
+            // Dengarkan ICE Candidate dari pemanggil
+            onSnapshot(offerCandidates, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === 'added') {
+                        const candidate = new RTCIceCandidate(change.doc.data());
+                        pc.addIceCandidate(candidate);
+                    }
+                });
+            });
+            
+            callStatus.innerText = "Terhubung!";
+        }
+    }
+
+    async function hangupCall() {
+        // Matikan kamera dan mikrofon
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+        }
+        if (remoteStream) {
+            remoteStream.getTracks().forEach(track => track.stop());
+        }
+        if (pc) {
+            pc.close();
+            pc = null;
+        }
+
+        // Hapus data panggilan di Firestore agar ruangan kosong kembali
+        const callDocRef = doc(db, "calls", roomName);
+        try { await deleteDoc(callDocRef); } catch(e) {}
+
+        // Sembunyikan UI
+        callModal.style.opacity = '0';
+        setTimeout(() => { callModal.style.display = 'none'; }, 400);
+    }
+</script>
+
+</body>
+</html>
